@@ -8,8 +8,8 @@
   /* ---------- General ---------- */
   body {
     font-family: Arial, Helvetica, sans-serif;
-    background: #f2f5f9;          /* soft, low‑contrast background */
-    color: #333;                  /* dark‑gray text – easier on the eyes */
+    background: #f7fafc;            /* modern, light‑blue‑gray background */
+    color: #333;
     margin: 0;
     padding: 0;
     min-height: 100vh;
@@ -25,7 +25,7 @@
     gap: .5rem;
     margin-top: 12px;
     font-size: 2rem;
-    color: #2c3e50;               /* slightly muted heading colour */
+    color: #2c3e50;
   }
   p.under-title {
     text-align: center;
@@ -42,6 +42,39 @@
     color: transparent;
   }
 
+  /* Live‑Radio button */
+  .live-radio-btn {
+    display: block;
+    margin: 12px auto;
+    padding: 8px 20px;
+    border: none;
+    border-radius: 5px;
+    background: #ff7043;
+    color: #fff;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+
+  /* Mode selector (Random / Order) */
+  #modeContainer {
+    text-align: center;
+    margin: 12px 0;
+  }
+  .mode-btn {
+    padding: 8px 16px;
+    margin: 0 5px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    background: #e0e0e0;
+    color: #333;
+    font-size: 0.95rem;
+  }
+  .mode-btn.active {
+    background: #ff7043;
+    color: #fff;
+  }
+
   /* ---------- Playlist Grid ---------- */
   #playlistContainer {
     display: flex;
@@ -49,7 +82,7 @@
     align-items: center;
   }
   .playlist-card {
-    position: relative;               /* needed for badge & share button */
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -108,7 +141,7 @@
     margin: 0 10px;
     border: none;
     border-radius: 5px;
-    background: #ff7043;        /* softer orange */
+    background: #ff7043;
     color: #fff;
     font-size: 16px;
     cursor: pointer;
@@ -134,7 +167,7 @@
     z-index: 1000;
   }
 
-  /* ---------- Modal ---------- */
+  /* ---------- Modal (feedback) ---------- */
   .modal {
     display: none;
     position: fixed;
@@ -153,6 +186,31 @@
     box-shadow: 0 5px 15px rgba(0,0,0,0.3);
   }
   .modal-content p { margin: 10px 0; }
+
+  /* ---------- Live‑Radio Overlay ---------- */
+  #liveRadioOverlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #000;               /* solid black background */
+    z-index: 5000;                  /* above everything else */
+  }
+  #liveRadioOverlay iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+  }
+  #closeLiveRadio {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    font-size: 2rem;
+    background: transparent;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    z-index: 5100;
+  }
 
   /* ---------- Footer ---------- */
   .footer {
@@ -186,6 +244,13 @@
 <p class="under-title">Every song has a place.</p>
 <p class="subheading">A home for every song and every soul — explore music beyond limits, across languages, moods, and moments.</p>
 
+<button id="liveRadioBtn" class="live-radio-btn">Live Radio</button>
+
+<div id="modeContainer">
+  <button id="randomModeBtn" class="mode-btn">Random</button>
+  <button id="orderModeBtn" class="mode-btn">Order</button>
+</div>
+
 <div id="playlistContainer"></div>
 
 <div id="playerPage">
@@ -207,6 +272,12 @@
   </div>
 </div>
 
+<!-- Live‑Radio fullscreen overlay -->
+<div id="liveRadioOverlay">
+  <button id="closeLiveRadio">✖</button>
+  <iframe id="liveRadioIframe" src=""></iframe>
+</div>
+
 <div id="toast"></div>
 
 <footer class="footer">© 2026 SoundCloud· Built with ❤️ by YAN</footer>
@@ -216,19 +287,28 @@
 /* ---------- Global Variables ---------- */
 const playlistContainer = document.getElementById('playlistContainer');
 const playerPage        = document.getElementById('playerPage');
-const playerContainer  = document.getElementById('playerContainer');
-const backBtn          = document.getElementById('backBtn');
-const prevBtn          = document.getElementById('prevBtn');
-const nextBtn          = document.getElementById('nextBtn');
-const chatFloating     = document.getElementById('chatFloating');
-const feedbackModal    = document.getElementById('feedbackModal');
-const countdownElm     = document.getElementById('countdown');
-const toastElm         = document.getElementById('toast');
+const playerContainer   = document.getElementById('playerContainer');
+const backBtn           = document.getElementById('backBtn');
+const prevBtn           = document.getElementById('prevBtn');
+const nextBtn           = document.getElementById('nextBtn');
+const chatFloating      = document.getElementById('chatFloating');
+const feedbackModal     = document.getElementById('feedbackModal');
+const countdownElm      = document.getElementById('countdown');
+const toastElm          = document.getElementById('toast');
+const randomModeBtn     = document.getElementById('randomModeBtn');
+const orderModeBtn      = document.getElementById('orderModeBtn');
+const liveRadioBtn      = document.getElementById('liveRadioBtn');
+
+const liveRadioOverlay  = document.getElementById('liveRadioOverlay');
+const closeLiveRadioBtn = document.getElementById('closeLiveRadio');
+const liveRadioIframe   = document.getElementById('liveRadioIframe');
 
 let widget          = null;          // SoundCloud widget instance
 let currentPlaylist = [];           // array of sound objects for the opened playlist
 let currentIndex    = 0;
 let allPlaylists    = [];           // data from data.json
+let playMode        = 'order';      // default playback mode
+
 const SHARE_REDIRECT_BASE = 
   'https://yan-1-related-1.github.io/yan-1-website-shared-links-redirecting/songs-content-page-shared-links-redirecting.html?playlist_id=';
 
@@ -237,7 +317,7 @@ function showToast(msg){
   toastElm.textContent = msg;
   toastElm.style.display = 'block';
   toastElm.style.opacity = '1';
-  setTimeout(()=> {
+  setTimeout(()=>{
     toastElm.style.opacity = '0';
     setTimeout(()=> toastElm.style.display = 'none', 500);
   }, 3000);
@@ -247,7 +327,7 @@ function copyToClipboard(text){
     navigator.clipboard.writeText(text)
       .then(()=> showToast('Link copied to clipboard!'))
       .catch(()=> showToast('Failed to copy link.'));
-  } else {
+  }else{
     const textarea = document.createElement('textarea');
     textarea.value = text;
     textarea.style.position = 'fixed';
@@ -268,9 +348,14 @@ function sharePlaylist(pl){
   if (navigator.share){
     navigator.share({ title: pl.title, url: shareLink })
       .catch(err=> console.warn('Share cancelled', err));
-  } else {
+  }else{
     copyToClipboard(shareLink);
   }
+}
+function setPlayMode(mode){
+  playMode = mode;
+  randomModeBtn.classList.toggle('active', mode==='random');
+  orderModeBtn.classList.toggle('active', mode==='order');
 }
 
 /* ---------- UI Rendering ---------- */
@@ -287,13 +372,13 @@ function renderPlaylists(){
       <p>${pl.description}</p>
     `;
 
-    // open player when clicking anywhere except the share button
+    // Open player (ignore share button clicks)
     card.addEventListener('click', e => {
       if (e.target.classList.contains('share-btn')) return;
       openPlaylistPage(pl.playlist_link);
     });
 
-    // share button
+    // Share button
     card.querySelector('.share-btn')
         .addEventListener('click', e => {
           e.stopPropagation();
@@ -328,15 +413,25 @@ function loadPlaylist(link){
   widget.bind(SC.Widget.Events.READY, () => {
     widget.getSounds(sounds => {
       currentPlaylist = sounds;
-      // start on a random track
-      currentIndex = Math.floor(Math.random() * sounds.length);
+      // start position depends on selected mode
+      if (playMode === 'order'){
+        currentIndex = 0;
+      }else{
+        currentIndex = Math.floor(Math.random()*sounds.length);
+      }
       playTrack(currentIndex);
     });
   });
+
   widget.bind(SC.Widget.Events.FINISH, () => {
-    // after a track ends, pick another random one
-    const nextIdx = Math.floor(Math.random() * currentPlaylist.length);
-    playTrack(nextIdx);
+    if (!currentPlaylist.length) return;
+    if (playMode === 'random'){
+      const nextIdx = Math.floor(Math.random()*currentPlaylist.length);
+      playTrack(nextIdx);
+    }else{
+      const nextIdx = (currentIndex + 1) % currentPlaylist.length;
+      playTrack(nextIdx);
+    }
   });
 }
 function playTrack(idx){
@@ -346,13 +441,23 @@ function playTrack(idx){
 }
 nextBtn.addEventListener('click', () => {
   if (!currentPlaylist.length) return;
-  currentIndex = (currentIndex + 1) % currentPlaylist.length;
-  playTrack(currentIndex);
+  if (playMode === 'random'){
+    const nextIdx = Math.floor(Math.random()*currentPlaylist.length);
+    playTrack(nextIdx);
+  }else{
+    const nextIdx = (currentIndex + 1) % currentPlaylist.length;
+    playTrack(nextIdx);
+  }
 });
 prevBtn.addEventListener('click', () => {
   if (!currentPlaylist.length) return;
-  currentIndex = (currentIndex - 1 + currentPlaylist.length) % currentPlaylist.length;
-  playTrack(currentIndex);
+  if (playMode === 'random'){
+    const prevIdx = Math.floor(Math.random()*currentPlaylist.length);
+    playTrack(prevIdx);
+  }else{
+    const prevIdx = (currentIndex - 1 + currentPlaylist.length) % currentPlaylist.length;
+    playTrack(prevIdx);
+  }
 });
 
 /* ---------- URL handling (shared link) ---------- */
@@ -382,14 +487,32 @@ chatFloating.addEventListener('click', () => {
   }, 1000);
 });
 
+/* ---------- Mode Buttons ---------- */
+randomModeBtn.addEventListener('click', () => setPlayMode('random'));
+orderModeBtn.addEventListener('click', () => setPlayMode('order'));
+// initialise active state
+setPlayMode(playMode);
+
+/* ---------- Live Radio (fullscreen iframe) ---------- */
+liveRadioBtn.addEventListener('click', () => {
+  liveRadioIframe.src = 'live_radio.html';   // load the radio page
+  liveRadioOverlay.style.display = 'block';
+  document.body.style.overflow = 'hidden';  // prevent background scrolling
+});
+closeLiveRadioBtn.addEventListener('click', () => {
+  liveRadioIframe.src = '';                  // unload to stop playback
+  liveRadioOverlay.style.display = 'none';
+  document.body.style.overflow = '';        // restore scrolling
+});
+
 /* ---------- Data Load ---------- */
 fetch('data.json')
   .then(r => r.json())
   .then(data => {
-    allPlaylists = data;            // each object should contain at least: id, title, description,
-                                    // image_url, playlist_link
+    allPlaylists = data;                // each object must contain: id, title, description,
+                                        // image_url, playlist_link
     renderPlaylists();
-    initFromURL();                  // respond to possible ?playlist_id=XYZ
+    initFromURL();                      // handle possible ?playlist_id=XYZ
   })
   .catch(err => {
     console.error('Failed to load data.json', err);
