@@ -58,6 +58,47 @@
     margin: 10px 0;
   }
 
+  /* Search Bar */
+  #searchContainer {
+    display: flex;
+    justify-content: center;
+    margin: 15px 0;
+    gap: 10px;
+  }
+  
+  #searchInput {
+    padding: 8px 12px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    width: 200px;
+  }
+  
+  #searchButton {
+    padding: 8px 15px;
+    background: #ff7043;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  
+  #searchType {
+    padding: 8px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+  }
+  
+  #backButton {
+    padding: 8px 15px;
+    background: #555;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-left: 10px;
+    display: none;
+  }
+
   /* Live‑Radio button */
   .live-radio-btn{
     display:block;
@@ -339,6 +380,17 @@
 <p class="under-title">Every song has a place.</p>
 <p class="subheading">A home for every song and every soul — explore music beyond limits, across languages, moods, and moments.</p>
 
+<!-- Search Bar -->
+<div id="searchContainer">
+  <input type="text" id="searchInput" placeholder="Search...">
+  <select id="searchType">
+    <option value="title">Title</option>
+    <option value="id">ID</option>
+  </select>
+  <button id="searchButton">Search</button>
+  <button id="backButton">Back</button>
+</div>
+
 <button id="liveRadioBtn" class="live-radio-btn">Live Radio</button>
 
 <div id="playlistContainer"></div>
@@ -410,11 +462,18 @@ const fullscreenContainer = document.getElementById('fullscreenContainer');
 const fullscreenImage     = document.getElementById('fullscreenImage');
 const closeFullscreen     = document.getElementById('closeFullscreen');
 
+// Search elements
+const searchInput       = document.getElementById('searchInput');
+const searchButton      = document.getElementById('searchButton');
+const searchType        = document.getElementById('searchType');
+const backButton        = document.getElementById('backButton');
+
 let widget          = null;          // SoundCloud widget
 let currentPlaylist = [];           // array of tracks
 let currentIndex    = 0;
 let allPlaylists    = [];           // data.json
 let playMode        = 'order';      // default
+let filteredPlaylists = [];         // for search results
 
 const SHARE_REDIRECT_BASE =
   'https://yan-1-related-1.github.io/yan-1-website-shared-links-redirecting/songs-content-page-shared-links-redirecting.html?playlist_id=';
@@ -476,10 +535,50 @@ function convertToEmbedImageUrl(detailsUrl) {
   return `https://archive.org/services/img/${identifier}`;
 }
 
+/* ---------- Search Functionality ---------- */
+function performSearch() {
+  const searchTerm = searchInput.value.trim().toLowerCase();
+  const searchBy = searchType.value;
+  
+  if (!searchTerm) {
+    filteredPlaylists = [...allPlaylists];
+  } else {
+    if (searchBy === 'title') {
+      filteredPlaylists = allPlaylists.filter(pl => 
+        pl.title.toLowerCase().includes(searchTerm)
+      );
+    } else if (searchBy === 'id') {
+      filteredPlaylists = allPlaylists.filter(pl => 
+        String(pl.id).includes(searchTerm)
+      );
+    }
+  }
+  
+  // Show back button when search is performed
+  backButton.style.display = 'inline-block';
+  
+  // Render the filtered results
+  renderPlaylists();
+}
+
+function resetSearch() {
+  searchInput.value = '';
+  filteredPlaylists = [...allPlaylists];
+  backButton.style.display = 'none';
+  renderPlaylists();
+}
+
 /* ---------- UI Rendering ---------- */
 function renderPlaylists(){
   playlistContainer.innerHTML = '';
-  allPlaylists.forEach(pl => {
+  
+  // If no results found
+  if (filteredPlaylists.length === 0) {
+    playlistContainer.innerHTML = '<p style="color: #e5e7eb; text-align: center;">No playlists found.</p>';
+    return;
+  }
+  
+  filteredPlaylists.forEach(pl => {
     const card = document.createElement('div');
     card.className = 'playlist-card';
     card.innerHTML = `
@@ -679,11 +778,23 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+// Search event listeners
+searchButton.addEventListener('click', performSearch);
+backButton.addEventListener('click', resetSearch);
+
+// Allow Enter key to trigger search
+searchInput.addEventListener('keyup', (e) => {
+  if (e.key === 'Enter') {
+    performSearch();
+  }
+});
+
 /* ---------- Data Load ---------- */
 fetch('data.json')
   .then(r=>r.json())
   .then(data=>{
     allPlaylists = data;   // expects id, title, description, image_url, playlist_link
+    filteredPlaylists = [...allPlaylists]; // Initialize filtered playlists
     renderPlaylists();
     initFromURL();
   })
